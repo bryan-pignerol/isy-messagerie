@@ -5,16 +5,18 @@ actor "Client" as Client
 rectangle "Utilisateur" {
     (Créer un groupe) as créer
     (lister les groupes) as lister
-    (rejoindre un groupe par mot de passe) as rejoindre
-    (quitter un groupe) as quitter
-    (écrire un message) as écrire
+    (Rejoindre un groupe par mot de passe) as rejoindre
+    (Quitter un groupe) as quitter
+    (Ecrire un message) as écrire
     (Lire les messages) as lire
     (Lister les membres) as membres
+    (Gain de points pour fonctionnalitées supplémentaire) as banque
 }
 rectangle "Administrateur"{
     (supprimer un groupe) as supprimer_groupe
     (fusionner 2 groupes) as fusionner
     (Moderer un membre) as moderer
+    (Ajouter points à un client) as ajouter
 }
 Client -- créer
 Client -- lister
@@ -23,8 +25,10 @@ Client -- quitter
 Client -- écrire
 Client -- lire
 Client -- membres
+Client -- banque
 gestionnaire -- supprimer_groupe
 gestionnaire -- fusionner
 gestionnaire -- moderer
 gestionnaire --> Client
+gestionnaire -- ajouter
 @enduml
