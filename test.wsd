@@ -1,0 +1,7 @@
+@startuml
+scale 2 
+left to right direction
+actor User
+User --> (Start)
+User --> (Stop)
+@enduml
