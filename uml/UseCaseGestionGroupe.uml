@@ -1,0 +1,12 @@
+@startuml
+top to bottom direction
+actor "Gestionnaire du groupe" as Gestionnaire
+(Supprimer groupe) as supprimer_groupe
+(Modérer utilisateur) as moderer
+(fusionner 2 groupes) as fusionner
+(ajouter ou retirer crédit à utilisateur) as crédit
+Gestionnaire ..> supprimer_groupe
+Gestionnaire ..> moderer
+Gestionnaire ..> fusionner
+Gestionnaire ..> crédit
+@enduml
