@@ -1,9 +1,7 @@
 @startuml
 left to right direction
-
 actor "Gestionnaire" as gestionnaire
 actor "Client" as Client
-
 rectangle "Utilisateur" {
     (Créer un groupe) as créer
     (lister les groupes) as lister
@@ -13,14 +11,11 @@ rectangle "Utilisateur" {
     (Lire les messages) as lire
     (Lister les membres) as membres
 }
-
 rectangle "Administrateur"{
     (supprimer un groupe) as supprimer_groupe
     (fusionner 2 groupes) as fusionner
     (Moderer un membre) as moderer
 }
-
-
 Client -- créer
 Client -- lister
 Client -- rejoindre
@@ -28,10 +23,8 @@ Client -- quitter
 Client -- écrire
 Client -- lire
 Client -- membres
-
 gestionnaire -- supprimer_groupe
 gestionnaire -- fusionner
 gestionnaire -- moderer
 gestionnaire --> Client
-
 @enduml
