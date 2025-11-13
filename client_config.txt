@@ -1,0 +1,9 @@
+# Configuration du Client ISY
+# Nom de l'utilisateur
+NOM=franck
+
+# Adresse IP du serveur
+IP_SERVEUR=172.16.141.201
+
+# Port du serveur
+PORT_SERVEUR=8000

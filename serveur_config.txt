@@ -2,7 +2,7 @@
 # Ce fichier définit les paramètres réseau du serveur
 
 # Adresse IP du serveur (utiliser 0.0.0.0 pour écouter sur toutes les interfaces)
-IP=127.0.0.1
+IP=172.16.141.201
 
 # Port d'écoute du serveur (par défaut: 8000)
 PORT=8000

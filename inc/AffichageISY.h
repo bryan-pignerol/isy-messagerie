@@ -5,6 +5,20 @@
  * Date         : 07/11/2025
  * Version      : 1.0
  *----------------------------------------------------------------------------*
- * Description  : Gestion des discussions au sein d'un groupe de messagerie
- *                Traitement des messages et synchronisation via SHM
+ * Description  : Affichage des messages reçus d'un groupe de discussion
  *============================================================================*/
+
+#ifndef AFFICHAGEISY_H
+#define AFFICHAGEISY_H
+
+#include "Commun.h"
+
+/*============================================================================*
+ * PROTOTYPES
+ *============================================================================*/
+
+void afficher_message(struct_message *msg);
+void gestionnaire_sigint(int sig);
+void gestionnaire_sigterm(int sig);
+
+#endif /* AFFICHAGEISY_H */
