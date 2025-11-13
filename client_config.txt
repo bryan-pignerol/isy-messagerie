@@ -3,7 +3,7 @@
 NOM=bryan
 
 # Adresse IP du serveur
-IP_SERVEUR=172.16.141.201
+IP_SERVEUR=172.20.10.2
 
 # Port du serveur
 PORT_SERVEUR=8000

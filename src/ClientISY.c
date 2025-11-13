@@ -272,6 +272,9 @@ void dialoguer_dans_groupe(const char *nom_groupe, int port_groupe) {
     char texte_message[TAILLE_TEXTE];
     struct_message msg;
     struct sockaddr_in adresse_groupe;
+    fd_set readfds;
+    struct timeval tv;
+    int retval;
     
     printf("\n=== Groupe : %s ===\n", nom_groupe);
     printf("Tapez 'quit' pour quitter le groupe\n\n");
@@ -282,31 +285,78 @@ void dialoguer_dans_groupe(const char *nom_groupe, int port_groupe) {
     adresse_groupe.sin_port = htons(port_groupe);
     adresse_groupe.sin_addr.s_addr = inet_addr("127.0.0.1");
     
-    /* Boucle d'envoi de messages */
+    /* Envoyer un message de connexion au groupe */
+    memset(&msg, 0, sizeof(struct_message));
+    strncpy(msg.Ordre, ORDRE_CON, TAILLE_ORDRE - 1);
+    strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
+    sendto(socket_client, &msg, sizeof(struct_message), 0,
+           (struct sockaddr *)&adresse_groupe, sizeof(struct sockaddr_in));
+    
+    /* Boucle d'envoi/réception de messages */
+    printf("Message : ");
+    fflush(stdout);
+    
     while (1) {
-        printf("Message : ");
-        if (fgets(texte_message, sizeof(texte_message), stdin) == NULL) {
-            break;
+        /* Configuration de select pour surveiller stdin et socket */
+        FD_ZERO(&readfds);
+        FD_SET(STDIN_FILENO, &readfds);
+        FD_SET(socket_client, &readfds);
+        
+        tv.tv_sec = 0;
+        tv.tv_usec = 100000; /* 100ms */
+        
+        retval = select(socket_client + 1, &readfds, NULL, NULL, &tv);
+        
+        if (retval > 0) {
+            /* Vérifier si on a reçu un message du groupe */
+            if (FD_ISSET(socket_client, &readfds)) {
+                struct_message msg_recu;
+                socklen_t len = sizeof(struct sockaddr_in);
+                ssize_t n = recvfrom(socket_client, &msg_recu, sizeof(struct_message), 
+                                    MSG_DONTWAIT, (struct sockaddr *)&adresse_groupe, &len);
+                
+                if (n > 0 && strncmp(msg_recu.Ordre, ORDRE_MSG, 3) == 0) {
+                    printf("\r%s : %s\n", msg_recu.Emetteur, msg_recu.Texte);
+                    printf("Message : ");
+                    fflush(stdout);
+                }
+            }
+            
+            /* Vérifier si l'utilisateur a tapé quelque chose */
+            if (FD_ISSET(STDIN_FILENO, &readfds)) {
+                if (fgets(texte_message, sizeof(texte_message), stdin) == NULL) {
+                    break;
+                }
+                texte_message[strcspn(texte_message, "\n")] = 0;
+                
+                /* Vérifier si l'utilisateur veut quitter */
+                if (strcmp(texte_message, "quit") == 0) {
+                    break;
+                }
+                
+                /* Préparer et envoyer le message */
+                memset(&msg, 0, sizeof(struct_message));
+                strncpy(msg.Ordre, ORDRE_MSG, TAILLE_ORDRE - 1);
+                strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
+                strncpy(msg.Texte, texte_message, TAILLE_TEXTE - 1);
+                
+                sendto(socket_client, &msg, sizeof(struct_message), 0,
+                       (struct sockaddr *)&adresse_groupe, sizeof(struct sockaddr_in));
+                
+                printf("Message : ");
+                fflush(stdout);
+            }
         }
-        texte_message[strcspn(texte_message, "\n")] = 0;
-        
-        /* Vérifier si l'utilisateur veut quitter */
-        if (strcmp(texte_message, "quit") == 0) {
-            break;
-        }
-        
-        /* Préparer le message */
-        memset(&msg, 0, sizeof(struct_message));
-        strncpy(msg.Ordre, ORDRE_MSG, TAILLE_ORDRE - 1);
-        strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
-        strncpy(msg.Texte, texte_message, TAILLE_TEXTE - 1);
-        
-        /* Envoyer le message au groupe */
-        sendto(socket_client, &msg, sizeof(struct_message), 0,
-               (struct sockaddr *)&adresse_groupe, sizeof(struct sockaddr_in));
     }
     
-    printf("Deconnexion du groupe %s\n", nom_groupe);
+    /* Envoyer un message de déconnexion */
+    memset(&msg, 0, sizeof(struct_message));
+    strncpy(msg.Ordre, ORDRE_QGR, TAILLE_ORDRE - 1);
+    strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
+    sendto(socket_client, &msg, sizeof(struct_message), 0,
+           (struct sockaddr *)&adresse_groupe, sizeof(struct sockaddr_in));
+    
+    printf("\nDeconnexion du groupe %s\n", nom_groupe);
 }
 
 int envoyer_serveur(struct_message *msg) {

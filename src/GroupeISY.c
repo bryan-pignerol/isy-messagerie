@@ -138,6 +138,15 @@ void traiter_message(struct_message *msg, struct sockaddr_in *adresse_client) {
     
     /* Vérifier si c'est un message à redistribuer */
     if (strncmp(msg->Ordre, ORDRE_MSG, 3) == 0) {
+        /* Mettre à jour l'adresse du membre si nécessaire */
+        int index = chercher_membre(msg->Emetteur);
+        if (index >= 0) {
+            shm->membres[index].adresse = *adresse_client;
+        } else {
+            /* Si le membre n'existe pas, l'ajouter */
+            ajouter_membre(msg->Emetteur, adresse_client);
+        }
+        
         printf("Reception Message %s : %s\n", msg->Emetteur, msg->Texte);
         redistribuer_message(msg);
         return;
