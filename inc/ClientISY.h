@@ -43,7 +43,7 @@ void afficher_menu();
 void creer_groupe();
 void rejoindre_groupe();
 void lister_groupes();
-void dialoguer_groupe();
+void dialoguer_dans_groupe(const char *nom_groupe, int port_groupe);
 int envoyer_serveur(struct_message *msg);
 int recevoir_serveur(struct_message *msg);
 void gestionnaire_sigint(int sig);

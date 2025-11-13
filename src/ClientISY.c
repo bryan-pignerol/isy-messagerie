@@ -60,38 +60,30 @@ int main(int argc, char *argv[]) {
     /* Installation du gestionnaire de signal */
     signal(SIGINT, gestionnaire_sigint);
     
-    /* Boucle principale du menu */
-    while (!arret_demande) {
-        afficher_menu();
-        printf("Choix :\n>");
-        
-        if (scanf("%d", &choix) != 1) {
-            while (getchar() != '\n');
-            continue;
-        }
-        while (getchar() != '\n');
-        
-        switch (choix) {
-            case 0:
-                creer_groupe();
-                break;
-            case 1:
-                rejoindre_groupe();
-                break;
-            case 2:
-                lister_groupes();
-                break;
-            case 3:
-                dialoguer_groupe();
-                break;
-            case 4:
-                printf("Fin du programme\n");
-                arret_demande = 1;
-                break;
-            default:
-                printf("Choix invalide\n");
-                break;
-        }
+    /* Menu simplifié */
+    afficher_menu();
+    printf("Choix :\n>");
+    
+    if (scanf("%d", &choix) != 1) {
+        printf("Choix invalide\n");
+        close(socket_client);
+        return EXIT_FAILURE;
+    }
+    while (getchar() != '\n');
+    
+    switch (choix) {
+        case 0:
+            creer_groupe();
+            break;
+        case 1:
+            rejoindre_groupe();
+            break;
+        case 2:
+            lister_groupes();
+            break;
+        default:
+            printf("Choix invalide\n");
+            break;
     }
     
     /* Nettoyage */
@@ -142,13 +134,12 @@ void afficher_menu() {
     printf("0 Creation de groupe\n");
     printf("1 Rejoindre un groupe\n");
     printf("2 Lister les groupes\n");
-    printf("3 Dialoguer sur un groupe\n");
-    printf("4 Quitter\n");
 }
 
 void creer_groupe() {
     struct_message msg, reponse;
     char nom_groupe[50];
+    int port_groupe;
     
     printf("Saisir le nom du groupe\n");
     if (fgets(nom_groupe, sizeof(nom_groupe), stdin) == NULL) {
@@ -174,10 +165,49 @@ void creer_groupe() {
         return;
     }
     
-    if (strncmp(reponse.Ordre, ORDRE_ACK, 3) == 0) {
-        printf("Groupe cree !\n");
-    } else {
+    if (strncmp(reponse.Ordre, ORDRE_ERR, 3) == 0) {
         printf("Erreur : %s\n", reponse.Texte);
+        return;
+    }
+    
+    /* Parser la réponse pour récupérer le port */
+    if (sscanf(reponse.Texte, "Groupe %*s créé sur port %d", &port_groupe) != 1) {
+        printf("Groupe cree !\n");
+        /* Essayer de rejoindre automatiquement */
+        memset(&msg, 0, sizeof(struct_message));
+        strncpy(msg.Ordre, ORDRE_JGR, TAILLE_ORDRE - 1);
+        strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
+        strncpy(msg.Texte, nom_groupe, TAILLE_TEXTE - 1);
+        
+        if (envoyer_serveur(&msg) < 0 || recevoir_serveur(&reponse) < 0) {
+            return;
+        }
+        
+        if (sscanf(reponse.Texte, "PORT:%d", &port_groupe) != 1) {
+            return;
+        }
+    }
+    
+    printf("Groupe cree ! Connexion au groupe %s\n", nom_groupe);
+    
+    /* Lancer AffichageISY */
+    pid_t pid = fork();
+    if (pid == 0) {
+        char port_str[10];
+        sprintf(port_str, "%d", port_groupe);
+        execl("./AffichageISY", "AffichageISY", nom_groupe, port_str, 
+              config.nom_utilisateur, NULL);
+        perror("Erreur execl AffichageISY");
+        exit(EXIT_FAILURE);
+    }
+    
+    /* Entrer dans le tchat */
+    dialoguer_dans_groupe(nom_groupe, port_groupe);
+    
+    /* Terminer l'affichage */
+    if (pid > 0) {
+        kill(pid, SIGTERM);
+        waitpid(pid, NULL, 0);
     }
 }
 
@@ -228,78 +258,28 @@ void rejoindre_groupe() {
         exit(EXIT_FAILURE);
     }
     
-    /* Enregistrer le groupe */
-    if (nombre_groupes_rejoints < MAX_GROUPES) {
-        strncpy(groupes_rejoints[nombre_groupes_rejoints].nom, nom_groupe, 49);
-        groupes_rejoints[nombre_groupes_rejoints].port = port_groupe;
-        strncpy(groupes_rejoints[nombre_groupes_rejoints].moderateur, 
-                moderateur_groupe, TAILLE_EMETTEUR - 1);
-        groupes_rejoints[nombre_groupes_rejoints].pid_affichage = pid;
-        groupes_rejoints[nombre_groupes_rejoints].actif = 1;
-        nombre_groupes_rejoints++;
+    /* Entrer dans le tchat */
+    dialoguer_dans_groupe(nom_groupe, port_groupe);
+    
+    /* Terminer l'affichage */
+    if (pid > 0) {
+        kill(pid, SIGTERM);
+        waitpid(pid, NULL, 0);
     }
 }
 
-void lister_groupes() {
-    struct_message msg, reponse;
-    
-    memset(&msg, 0, sizeof(struct_message));
-    strncpy(msg.Ordre, ORDRE_LST, TAILLE_ORDRE - 1);
-    strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
-    
-    if (envoyer_serveur(&msg) < 0 || recevoir_serveur(&reponse) < 0) {
-        printf("Erreur communication serveur\n");
-        return;
-    }
-    
-    printf("%s\n", reponse.Texte);
-}
-
-void dialoguer_groupe() {
-    char nom_groupe[50];
+void dialoguer_dans_groupe(const char *nom_groupe, int port_groupe) {
     char texte_message[TAILLE_TEXTE];
     struct_message msg;
     struct sockaddr_in adresse_groupe;
-    int index_groupe = -1;
     
-    /* Afficher les groupes rejoints */
-    if (nombre_groupes_rejoints == 0) {
-        printf("Aucun groupe rejoint. Rejoignez d'abord un groupe.\n");
-        return;
-    }
-    
-    printf("Groupes disponibles :\n");
-    for (int i = 0; i < nombre_groupes_rejoints; i++) {
-        if (groupes_rejoints[i].actif) {
-            printf("  - %s (port %d)\n", groupes_rejoints[i].nom, groupes_rejoints[i].port);
-        }
-    }
-    
-    printf("Saisir le nom du groupe\n");
-    if (fgets(nom_groupe, sizeof(nom_groupe), stdin) == NULL) {
-        return;
-    }
-    nom_groupe[strcspn(nom_groupe, "\n")] = 0;
-    
-    /* Chercher le groupe */
-    for (int i = 0; i < nombre_groupes_rejoints; i++) {
-        if (groupes_rejoints[i].actif && strcmp(groupes_rejoints[i].nom, nom_groupe) == 0) {
-            index_groupe = i;
-            break;
-        }
-    }
-    
-    if (index_groupe < 0) {
-        printf("Groupe non trouvé ou non rejoint\n");
-        return;
-    }
-    
-    printf("Tapez 'quit' pour revenir au menu\n");
+    printf("\n=== Groupe : %s ===\n", nom_groupe);
+    printf("Tapez 'quit' pour quitter le groupe\n\n");
     
     /* Configuration de l'adresse du groupe */
     memset(&adresse_groupe, 0, sizeof(struct sockaddr_in));
     adresse_groupe.sin_family = AF_INET;
-    adresse_groupe.sin_port = htons(groupes_rejoints[index_groupe].port);
+    adresse_groupe.sin_port = htons(port_groupe);
     adresse_groupe.sin_addr.s_addr = inet_addr("127.0.0.1");
     
     /* Boucle d'envoi de messages */
@@ -325,6 +305,8 @@ void dialoguer_groupe() {
         sendto(socket_client, &msg, sizeof(struct_message), 0,
                (struct sockaddr *)&adresse_groupe, sizeof(struct sockaddr_in));
     }
+    
+    printf("Deconnexion du groupe %s\n", nom_groupe);
 }
 
 int envoyer_serveur(struct_message *msg) {
@@ -366,4 +348,19 @@ void gestionnaire_sigint(int sig) {
             kill(groupes_rejoints[i].pid_affichage, SIGTERM);
         }
     }
+}
+
+void lister_groupes() {
+    struct_message msg, reponse;
+    
+    memset(&msg, 0, sizeof(struct_message));
+    strncpy(msg.Ordre, ORDRE_LST, TAILLE_ORDRE - 1);
+    strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
+    
+    if (envoyer_serveur(&msg) < 0 || recevoir_serveur(&reponse) < 0) {
+        printf("Erreur communication serveur\n");
+        return;
+    }
+    
+    printf("Groupes disponibles : %s\n", reponse.Texte);
 }
