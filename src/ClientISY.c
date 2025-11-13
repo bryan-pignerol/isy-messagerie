@@ -256,8 +256,75 @@ void lister_groupes() {
 }
 
 void dialoguer_groupe() {
-    printf("Fonction dialoguer_groupe non implémentée dans cette version simplifiée\n");
-    printf("Utilisez rejoindre_groupe pour lancer l'affichage\n");
+    char nom_groupe[50];
+    char texte_message[TAILLE_TEXTE];
+    struct_message msg;
+    struct sockaddr_in adresse_groupe;
+    int index_groupe = -1;
+    
+    /* Afficher les groupes rejoints */
+    if (nombre_groupes_rejoints == 0) {
+        printf("Aucun groupe rejoint. Rejoignez d'abord un groupe.\n");
+        return;
+    }
+    
+    printf("Groupes disponibles :\n");
+    for (int i = 0; i < nombre_groupes_rejoints; i++) {
+        if (groupes_rejoints[i].actif) {
+            printf("  - %s (port %d)\n", groupes_rejoints[i].nom, groupes_rejoints[i].port);
+        }
+    }
+    
+    printf("Saisir le nom du groupe\n");
+    if (fgets(nom_groupe, sizeof(nom_groupe), stdin) == NULL) {
+        return;
+    }
+    nom_groupe[strcspn(nom_groupe, "\n")] = 0;
+    
+    /* Chercher le groupe */
+    for (int i = 0; i < nombre_groupes_rejoints; i++) {
+        if (groupes_rejoints[i].actif && strcmp(groupes_rejoints[i].nom, nom_groupe) == 0) {
+            index_groupe = i;
+            break;
+        }
+    }
+    
+    if (index_groupe < 0) {
+        printf("Groupe non trouvé ou non rejoint\n");
+        return;
+    }
+    
+    printf("Tapez 'quit' pour revenir au menu\n");
+    
+    /* Configuration de l'adresse du groupe */
+    memset(&adresse_groupe, 0, sizeof(struct sockaddr_in));
+    adresse_groupe.sin_family = AF_INET;
+    adresse_groupe.sin_port = htons(groupes_rejoints[index_groupe].port);
+    adresse_groupe.sin_addr.s_addr = inet_addr("127.0.0.1");
+    
+    /* Boucle d'envoi de messages */
+    while (1) {
+        printf("Message : ");
+        if (fgets(texte_message, sizeof(texte_message), stdin) == NULL) {
+            break;
+        }
+        texte_message[strcspn(texte_message, "\n")] = 0;
+        
+        /* Vérifier si l'utilisateur veut quitter */
+        if (strcmp(texte_message, "quit") == 0) {
+            break;
+        }
+        
+        /* Préparer le message */
+        memset(&msg, 0, sizeof(struct_message));
+        strncpy(msg.Ordre, ORDRE_MSG, TAILLE_ORDRE - 1);
+        strncpy(msg.Emetteur, config.nom_utilisateur, TAILLE_EMETTEUR - 1);
+        strncpy(msg.Texte, texte_message, TAILLE_TEXTE - 1);
+        
+        /* Envoyer le message au groupe */
+        sendto(socket_client, &msg, sizeof(struct_message), 0,
+               (struct sockaddr *)&adresse_groupe, sizeof(struct sockaddr_in));
+    }
 }
 
 int envoyer_serveur(struct_message *msg) {
