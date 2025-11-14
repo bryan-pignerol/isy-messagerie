@@ -8,7 +8,7 @@
  * Description  : Interface client pour la gestion des commandes utilisateur
  *============================================================================*/
 
-#include "ClientISY.h"
+#include "../inc/ClientISY.h"
 
 /*============================================================================*
  * VARIABLES GLOBALES
@@ -22,7 +22,6 @@ int g_dans_groupe = 0;
 char g_nom_groupe_actuel[TAILLE_NOM_GROUPE];
 int g_port_groupe_actuel = 0;
 struct sockaddr_in g_addr_groupe;
-char g_moderateur_groupe_actuel[TAILLE_EMETTEUR];  /* Modérateur du groupe */
 
 /*============================================================================*
  * FONCTION : gestionnaire_sigint_client
@@ -255,7 +254,6 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
                    COULEUR_VERT, nom_groupe, COULEUR_RESET);
             
             strncpy(g_nom_groupe_actuel, nom_groupe, TAILLE_NOM_GROUPE - 1);
-            strncpy(g_moderateur_groupe_actuel, moderateur, TAILLE_EMETTEUR - 1);
             g_port_groupe_actuel = port_groupe;
             
             memset(&g_addr_groupe, 0, sizeof(g_addr_groupe));
@@ -335,7 +333,7 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
     
     printf("\n%s========================================%s\n",
            COULEUR_MAGENTA, COULEUR_RESET);
-    printf("%sGroupe : %s %d%s\n", COULEUR_MAGENTA, g_nom_groupe_actuel, g_port_groupe_actuel, COULEUR_RESET);
+    printf("%sGroupe : %s%s\n", COULEUR_MAGENTA, g_nom_groupe_actuel, COULEUR_RESET);
     printf("%s========================================%s\n",
            COULEUR_MAGENTA, COULEUR_RESET);
     printf("Tapez %squit%s pour revenir au menu\n",
@@ -372,11 +370,7 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
             
             if (g_pid_affichage > 0)
             {
-                printf("%sAttente de fermeture de l affichage...%s\n",
-                       COULEUR_JAUNE, COULEUR_RESET);
-                kill(g_pid_affichage, SIGINT);
-                waitpid(g_pid_affichage, NULL, 0);
-                printf("%sAffichage clos%s\n", COULEUR_VERT, COULEUR_RESET);
+                kill(g_pid_affichage, SIGTERM);
             }
             
             g_dans_groupe = 0;
@@ -460,8 +454,7 @@ void terminer_client_proprement(void)
         sendto(g_socket_client, &msg, sizeof(msg), 0,
                (struct sockaddr *)&g_addr_groupe, sizeof(g_addr_groupe));
         
-        kill(g_pid_affichage, SIGINT);
-        waitpid(g_pid_affichage, NULL, 0);
+        kill(g_pid_affichage, SIGTERM);
     }
     
     if (g_socket_client != -1)
