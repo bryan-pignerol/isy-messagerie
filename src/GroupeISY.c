@@ -250,19 +250,15 @@ void traiter_message(struct struct_message *msg, struct sockaddr_in *addr_client
         
         ajouter_membre(msg->Emetteur, addr_client);
         
-        /* Ne pas afficher si c'est juste le processus d'affichage */
-        if (strcmp(msg->Emetteur, "AFFICHAGE") != 0)
-        {
-            printf("%s%s s est connecte au groupe %s%s\n",
-                   COULEUR_VERT, msg->Emetteur, g_nom_groupe, COULEUR_RESET);
-            
-            memset(&notif, 0, sizeof(notif));
-            strncpy(notif.Ordre, ORDRE_INF, TAILLE_ORDRE - 1);
-            strncpy(notif.Emetteur, "SYSTEME", TAILLE_EMETTEUR - 1);
-            sprintf(notif.Texte, "%s a rejoint le groupe", msg->Emetteur);
-            
-            redistribuer_message(&notif, socket_fd);
-        }
+        printf("%s%s s est connecte au groupe %s%s\n",
+               COULEUR_VERT, msg->Emetteur, g_nom_groupe, COULEUR_RESET);
+        
+        memset(&notif, 0, sizeof(notif));
+        strncpy(notif.Ordre, ORDRE_INF, TAILLE_ORDRE - 1);
+        strncpy(notif.Emetteur, "SYSTEME", TAILLE_EMETTEUR - 1);
+        sprintf(notif.Texte, "%s a rejoint le groupe", msg->Emetteur);
+        
+        redistribuer_message(&notif, socket_fd);
     }
     else if (strcmp(msg->Ordre, ORDRE_DECI) == 0)
     {

@@ -8,7 +8,7 @@
  * Description  : Programme d'affichage des messages d'un groupe
  *============================================================================*/
 
-#include "../inc/AffichageISY.h"
+#include "AffichageISY.h"
 
 /*============================================================================*
  * VARIABLES GLOBALES
@@ -172,6 +172,8 @@ int main(int argc, char **argv, char **envp)
     int port_groupe;
     char moderateur[TAILLE_EMETTEUR];
     char ip_serveur[TAILLE_IP];
+    char nom_utilisateur[TAILLE_EMETTEUR];
+    char nom_unique[TAILLE_EMETTEUR];
     struct sockaddr_in addr_groupe;
     struct struct_message msg_connexion;
     FILE *f;
@@ -192,8 +194,9 @@ int main(int argc, char **argv, char **envp)
     strncpy(moderateur, g_nom_groupe_aff, TAILLE_EMETTEUR - 1);
     moderateur[TAILLE_EMETTEUR - 1] = '\0';
     
-    /* Lire l'IP du serveur depuis client_config.txt */
+    /* Lire l'IP du serveur ET le nom d'utilisateur depuis client_config.txt */
     strcpy(ip_serveur, "127.0.0.1");  /* Valeur par défaut */
+    strcpy(nom_utilisateur, "User");   /* Valeur par défaut */
     f = fopen("client_config.txt", "r");
     if (f != NULL)
     {
@@ -202,11 +205,21 @@ int main(int argc, char **argv, char **envp)
             if (strncmp(ligne, "IP_SERVEUR=", 11) == 0)
             {
                 sscanf(ligne, "IP_SERVEUR=%s", ip_serveur);
-                break;
+            }
+            else if (strncmp(ligne, "NOM=", 4) == 0)
+            {
+                sscanf(ligne, "NOM=%s", nom_utilisateur);
             }
         }
         fclose(f);
     }
+    
+    /* Créer un nom unique pour l'affichage : "nom_utilisateur_AFF" */
+    /* Limiter à 15 caractères pour laisser place au suffixe "_AFF" */
+    char nom_court[16];
+    strncpy(nom_court, nom_utilisateur, 15);
+    nom_court[15] = '\0';
+    snprintf(nom_unique, TAILLE_EMETTEUR, "%s_AFF", nom_court);
     
     if (signal(SIGINT, gestionnaire_sigint_affichage) == SIG_ERR)
     {
@@ -226,10 +239,10 @@ int main(int argc, char **argv, char **envp)
     addr_groupe.sin_port = htons(port_groupe);
     addr_groupe.sin_addr.s_addr = inet_addr(ip_serveur);  /* IP du serveur ! */
     
-    /* Envoyer message de connexion au groupe */
+    /* Envoyer message de connexion au groupe avec nom unique */
     memset(&msg_connexion, 0, sizeof(msg_connexion));
     strncpy(msg_connexion.Ordre, ORDRE_CON, TAILLE_ORDRE - 1);
-    strncpy(msg_connexion.Emetteur, "AFFICHAGE", TAILLE_EMETTEUR - 1);
+    strncpy(msg_connexion.Emetteur, nom_unique, TAILLE_EMETTEUR - 1);
     sprintf(msg_connexion.Texte, "Connexion affichage");
     
     sendto(g_socket_affichage, &msg_connexion, sizeof(msg_connexion), 0,
