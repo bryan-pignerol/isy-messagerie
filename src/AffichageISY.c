@@ -8,7 +8,7 @@
  * Description  : Programme d'affichage des messages d'un groupe
  *============================================================================*/
 
-#include "AffichageISY.h"
+#include "../inc/AffichageISY.h"
 
 /*============================================================================*
  * VARIABLES GLOBALES
@@ -171,20 +171,42 @@ int main(int argc, char **argv, char **envp)
 {
     int port_groupe;
     char moderateur[TAILLE_EMETTEUR];
+    char ip_serveur[TAILLE_IP];
     struct sockaddr_in addr_groupe;
     struct struct_message msg_connexion;
+    FILE *f;
+    char ligne[256];
     
     (void)envp;
     
-    if (argc < 4)
+    if (argc < 3)
     {
-        fprintf(stderr, "Usage: %s <nom_groupe> <port_groupe> <moderateur>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <nom_groupe> <port_groupe>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     
     strncpy(g_nom_groupe_aff, argv[1], TAILLE_NOM_GROUPE - 1);
     port_groupe = atoi(argv[2]);
-    strncpy(moderateur, argv[3], TAILLE_EMETTEUR - 1);
+    
+    /* Le modérateur sera affiché simplement comme le nom du groupe */
+    strncpy(moderateur, g_nom_groupe_aff, TAILLE_EMETTEUR - 1);
+    moderateur[TAILLE_EMETTEUR - 1] = '\0';
+    
+    /* Lire l'IP du serveur depuis client_config.txt */
+    strcpy(ip_serveur, "127.0.0.1");  /* Valeur par défaut */
+    f = fopen("client_config.txt", "r");
+    if (f != NULL)
+    {
+        while (fgets(ligne, sizeof(ligne), f) != NULL)
+        {
+            if (strncmp(ligne, "IP_SERVEUR=", 11) == 0)
+            {
+                sscanf(ligne, "IP_SERVEUR=%s", ip_serveur);
+                break;
+            }
+        }
+        fclose(f);
+    }
     
     if (signal(SIGINT, gestionnaire_sigint_affichage) == SIG_ERR)
     {
@@ -202,7 +224,7 @@ int main(int argc, char **argv, char **envp)
     memset(&addr_groupe, 0, sizeof(addr_groupe));
     addr_groupe.sin_family = AF_INET;
     addr_groupe.sin_port = htons(port_groupe);
-    addr_groupe.sin_addr.s_addr = inet_addr("127.0.0.1");
+    addr_groupe.sin_addr.s_addr = inet_addr(ip_serveur);  /* IP du serveur ! */
     
     /* Envoyer message de connexion au groupe */
     memset(&msg_connexion, 0, sizeof(msg_connexion));

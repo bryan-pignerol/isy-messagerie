@@ -274,7 +274,7 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
             printf("%sLancement de l affichage...%s\n",
                    COULEUR_JAUNE, COULEUR_RESET);
             
-            g_pid_affichage = lancer_affichage(nom_groupe, port_groupe, moderateur);
+            g_pid_affichage = lancer_affichage(nom_groupe, port_groupe);
             g_dans_groupe = 1;
         }
         else
@@ -335,7 +335,7 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
     
     printf("\n%s========================================%s\n",
            COULEUR_MAGENTA, COULEUR_RESET);
-    printf("%sGroupe : %s%s\n", COULEUR_MAGENTA, g_nom_groupe_actuel, COULEUR_RESET);
+    printf("%sGroupe : %s %d%s\n", COULEUR_MAGENTA, g_nom_groupe_actuel, g_port_groupe_actuel, COULEUR_RESET);
     printf("%s========================================%s\n",
            COULEUR_MAGENTA, COULEUR_RESET);
     printf("Tapez %squit%s pour revenir au menu\n",
@@ -418,7 +418,7 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
  * FONCTION : lancer_affichage
  * DESCRIPTION : Lance le processus AffichageISY
  *============================================================================*/
-pid_t lancer_affichage(const char *nom_groupe, int port_groupe, const char *moderateur)
+pid_t lancer_affichage(const char *nom_groupe, int port_groupe)
 {
     pid_t pid;
     char port_str[10];
@@ -433,7 +433,7 @@ pid_t lancer_affichage(const char *nom_groupe, int port_groupe, const char *mode
     }
     else if (pid == 0)
     {
-        execl("./AffichageISY", "AffichageISY", nom_groupe, port_str, moderateur, NULL);
+        execl("./AffichageISY", "AffichageISY", nom_groupe, port_str, NULL);
         perror("Erreur execl");
         exit(1);
     }

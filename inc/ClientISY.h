@@ -37,7 +37,7 @@ void lister_groupes_cmd(int socket_fd, ConfigClient *config);
 void envoyer_message(int socket_fd, const char *message, const char *groupe);
 
 /* Processus d'affichage */
-pid_t lancer_affichage(const char *nom_groupe, int port_groupe, const char *moderateur);
+pid_t lancer_affichage(const char *nom_groupe, int port_groupe);
 
 /* Nettoyage */
 void terminer_client_proprement(void);
