@@ -1,52 +1,52 @@
-# syntax=docker/dockerfile:1
+#=============================================================================#
+# ISY MESSAGERIE - Dockerfile
+#=============================================================================#
+# Auteur       : Bryan
+# Date         : 14/11/2025
+# Version      : 1.0
+#-----------------------------------------------------------------------------#
+# Description  : Image Docker pour deployer le serveur ISY Messagerie
+#=============================================================================#
 
-FROM alpine:latest as base
+# Image de base Ubuntu
+FROM ubuntu:24.04
 
-# Installer les outils de compilation C
-RUN apk add --no-cache gcc musl-dev make
+# Mise a jour et installation des dependances
+RUN apt-get update && apt-get install -y \
+    gcc \
+    make \
+    && rm -rf /var/lib/apt/lists/*
 
-################################################################################
-# Stage de compilation
-FROM base as build
-
+# Creation du repertoire de travail
 WORKDIR /app
 
-# Copier les fichiers sources
-COPY . .
+# Copie des sources
+COPY src/ ./src/
+COPY inc/ ./inc/
+COPY Makefile .
+COPY serveur_config.txt .
+COPY client_config.txt .
 
-# Compiler le programme ServeurISY
-# Adapte la commande selon ta structure de projet
-RUN gcc -o ServeurISY ServeurISY.c -Wall -Wextra
-# Ou si tu as un Makefile :
-# RUN make ServeurISY
+# Creation du repertoire obj
+RUN mkdir -p obj
 
-################################################################################
-# Stage final
-FROM base AS final
+# Compilation
+RUN make all
 
-# Installer uniquement les dépendances runtime si nécessaire
-RUN apk add --no-cache libgcc
+# Exposition des ports
+# Port 8000 pour le serveur principal
+# Ports 8001-8020 pour les groupes
+EXPOSE 8000/udp
+EXPOSE 8001-8020/udp
 
-# Créer un utilisateur non-privilégié
-ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    appuser
+# Le serveur tourne dans Docker
+# Les clients tournent sur la machine hote (pas dans Docker)
+# 
+# Lancer le serveur :
+#   docker run -d -p 8000:8000/udp -p 8001-8020:8001-8020/udp \
+#     --name isy-serveur isy-messagerie
+#
+# Lancer le client (sur la machine hote, PAS en Docker) :
+#   ./ClientISY
 
-WORKDIR /app
-
-# Copier l'exécutable compilé depuis le stage build
-COPY --from=build /app/ServeurISY /app/
-
-# Donner les permissions appropriées
-RUN chown appuser:appuser /app/ServeurISY
-
-USER appuser
-
-# Lancer le serveur
-ENTRYPOINT [ "/app/ServeurISY" ]
+CMD ["./ServeurISY"]

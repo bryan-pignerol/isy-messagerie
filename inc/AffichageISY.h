@@ -1,11 +1,11 @@
 /*============================================================================*
  * ISY MESSAGERIE - AffichageISY.h
  *============================================================================*
- * Auteur       : Votre Nom
- * Date         : 07/11/2025
+ * Auteur       : Bryan
+ * Date         : 14/11/2025
  * Version      : 1.0
  *----------------------------------------------------------------------------*
- * Description  : Affichage des messages reçus d'un groupe de discussion
+ * Description  : En-tête du programme d'affichage des messages
  *============================================================================*/
 
 #ifndef AFFICHAGEISY_H
@@ -14,11 +14,24 @@
 #include "Commun.h"
 
 /*============================================================================*
- * PROTOTYPES
+ * PROTOTYPES DES FONCTIONS
  *============================================================================*/
 
-void afficher_message(struct_message *msg);
-void gestionnaire_sigint(int sig);
-void gestionnaire_sigterm(int sig);
+/* Initialisation */
+int initialiser_socket_affichage(int port_groupe);
+
+/* Gestion des signaux */
+void gestionnaire_sigint_affichage(int sig);
+
+/* Affichage des messages */
+void afficher_message(struct struct_message *msg);
+void afficher_connexion(const char *nom);
+void afficher_deconnexion(const char *nom);
+
+/* Boucle principale */
+void boucle_reception(int socket_fd, const char *nom_groupe, const char *moderateur);
+
+/* Nettoyage */
+void terminer_affichage_proprement(void);
 
 #endif /* AFFICHAGEISY_H */

@@ -1,11 +1,11 @@
-# Configuration du Serveur ISY
-# Ce fichier définit les paramètres réseau du serveur
+# Configuration du Serveur ISY Messagerie
+# Ce fichier contient les parametres de connexion du serveur
 
-# Adresse IP du serveur (utiliser 0.0.0.0 pour écouter sur toutes les interfaces)
-IP=172.20.10.2
+# Adresse IP du serveur
+IP=127.0.0.1
 
-# Port d'écoute du serveur (par défaut: 8000)
+# Port d'ecoute du serveur principal
 PORT=8000
 
-# Note: Les ports des groupes sont automatiquement assignés
-# à partir de 8100 (PORT_GROUPE_BASE)
+# Protocole utilise (UDP)
+PROTOCOLE=UDP
