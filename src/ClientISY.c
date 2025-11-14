@@ -8,7 +8,7 @@
  * Description  : Interface client pour la gestion des commandes utilisateur
  *============================================================================*/
 
-#include "../inc/ClientISY.h"
+#include "ClientISY.h"
 
 /*============================================================================*
  * VARIABLES GLOBALES
@@ -22,6 +22,7 @@ int g_dans_groupe = 0;
 char g_nom_groupe_actuel[TAILLE_NOM_GROUPE];
 int g_port_groupe_actuel = 0;
 struct sockaddr_in g_addr_groupe;
+char g_moderateur_groupe_actuel[TAILLE_EMETTEUR];  /* Modérateur du groupe */
 
 /*============================================================================*
  * FONCTION : gestionnaire_sigint_client
@@ -254,6 +255,7 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
                    COULEUR_VERT, nom_groupe, COULEUR_RESET);
             
             strncpy(g_nom_groupe_actuel, nom_groupe, TAILLE_NOM_GROUPE - 1);
+            strncpy(g_moderateur_groupe_actuel, moderateur, TAILLE_EMETTEUR - 1);
             g_port_groupe_actuel = port_groupe;
             
             memset(&g_addr_groupe, 0, sizeof(g_addr_groupe));
@@ -272,7 +274,7 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
             printf("%sLancement de l affichage...%s\n",
                    COULEUR_JAUNE, COULEUR_RESET);
             
-            g_pid_affichage = lancer_affichage(nom_groupe, port_groupe);
+            g_pid_affichage = lancer_affichage(nom_groupe, port_groupe, moderateur);
             g_dans_groupe = 1;
         }
         else
@@ -416,7 +418,7 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
  * FONCTION : lancer_affichage
  * DESCRIPTION : Lance le processus AffichageISY
  *============================================================================*/
-pid_t lancer_affichage(const char *nom_groupe, int port_groupe)
+pid_t lancer_affichage(const char *nom_groupe, int port_groupe, const char *moderateur)
 {
     pid_t pid;
     char port_str[10];
@@ -431,7 +433,7 @@ pid_t lancer_affichage(const char *nom_groupe, int port_groupe)
     }
     else if (pid == 0)
     {
-        execl("./AffichageISY", "AffichageISY", nom_groupe, port_str, NULL);
+        execl("./AffichageISY", "AffichageISY", nom_groupe, port_str, moderateur, NULL);
         perror("Erreur execl");
         exit(1);
     }

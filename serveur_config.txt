@@ -2,7 +2,7 @@
 # Ce fichier contient les parametres de connexion du serveur
 
 # Adresse IP du serveur
-IP=127.0.0.1
+IP=172.20.10.2
 
 # Port d'ecoute du serveur principal
 PORT=8000

@@ -8,7 +8,7 @@
  * Description  : Programme d'affichage des messages d'un groupe
  *============================================================================*/
 
-#include "../inc/AffichageISY.h"
+#include "AffichageISY.h"
 
 /*============================================================================*
  * VARIABLES GLOBALES
@@ -30,11 +30,13 @@ void gestionnaire_sigint_affichage(int sig)
 /*============================================================================*
  * FONCTION : initialiser_socket_affichage
  * DESCRIPTION : Cree le socket UDP pour recevoir les messages
+ * NOTE : En UDP client, pas besoin de bind ! Le système assigne un port auto.
  *============================================================================*/
 int initialiser_socket_affichage(int port_groupe)
 {
     int sockfd;
-    struct sockaddr_in servaddr;
+    
+    (void)port_groupe;  /* Port groupe pas nécessaire ici */
     
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0)
@@ -43,17 +45,10 @@ int initialiser_socket_affichage(int port_groupe)
         return -1;
     }
     
-    memset(&servaddr, 0, sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(port_groupe);
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    
-    if (bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
-    {
-        perror("Erreur bind affichage");
-        close(sockfd);
-        return -1;
-    }
+    /* Pas de bind() nécessaire pour un client UDP !
+     * Le système assignera automatiquement un port éphémère
+     * lors du premier recvfrom()
+     */
     
     return sockfd;
 }
@@ -175,18 +170,21 @@ void terminer_affichage_proprement(void)
 int main(int argc, char **argv, char **envp)
 {
     int port_groupe;
-    char moderateur[TAILLE_EMETTEUR] = "Unknown";
+    char moderateur[TAILLE_EMETTEUR];
+    struct sockaddr_in addr_groupe;
+    struct struct_message msg_connexion;
     
     (void)envp;
     
-    if (argc < 3)
+    if (argc < 4)
     {
-        fprintf(stderr, "Usage: %s <nom_groupe> <port_groupe>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <nom_groupe> <port_groupe> <moderateur>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     
     strncpy(g_nom_groupe_aff, argv[1], TAILLE_NOM_GROUPE - 1);
     port_groupe = atoi(argv[2]);
+    strncpy(moderateur, argv[3], TAILLE_EMETTEUR - 1);
     
     if (signal(SIGINT, gestionnaire_sigint_affichage) == SIG_ERR)
     {
@@ -199,6 +197,21 @@ int main(int argc, char **argv, char **envp)
     {
         exit(EXIT_FAILURE);
     }
+    
+    /* S'enregistrer auprès de GroupeISY pour recevoir les messages */
+    memset(&addr_groupe, 0, sizeof(addr_groupe));
+    addr_groupe.sin_family = AF_INET;
+    addr_groupe.sin_port = htons(port_groupe);
+    addr_groupe.sin_addr.s_addr = inet_addr("127.0.0.1");
+    
+    /* Envoyer message de connexion au groupe */
+    memset(&msg_connexion, 0, sizeof(msg_connexion));
+    strncpy(msg_connexion.Ordre, ORDRE_CON, TAILLE_ORDRE - 1);
+    strncpy(msg_connexion.Emetteur, "AFFICHAGE", TAILLE_EMETTEUR - 1);
+    sprintf(msg_connexion.Texte, "Connexion affichage");
+    
+    sendto(g_socket_affichage, &msg_connexion, sizeof(msg_connexion), 0,
+           (struct sockaddr *)&addr_groupe, sizeof(addr_groupe));
     
     boucle_reception(g_socket_affichage, g_nom_groupe_aff, moderateur);
     
