@@ -280,6 +280,13 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
             
             g_pid_affichage = lancer_affichage(nom_groupe, port_groupe);
             g_dans_groupe = 1;
+
+            char commande[512];
+            snprintf(commande, sizeof(commande),
+                "gnome-terminal -- bash -c './AffichageISY \"%s\" %d; exec bash'",
+                nom_groupe, port_groupe);
+
+            system(commande);
             
             /* Lancer directement le dialogue dans le groupe */
             dialoguer_groupe(socket_fd, config);
