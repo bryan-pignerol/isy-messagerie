@@ -278,7 +278,6 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
             printf("%sLancement de l affichage...%s\n",
                    COULEUR_JAUNE, COULEUR_RESET);
             
-            g_pid_affichage = lancer_affichage(nom_groupe, port_groupe);
             g_dans_groupe = 1;
 
             char commande[512];
@@ -286,7 +285,20 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
                 "gnome-terminal -- bash -c './AffichageISY \"%s\" %d; exec bash'",
                 nom_groupe, port_groupe);
 
-            system(commande);
+            pid_t pid_terminal = fork();
+            if (pid_terminal == 0)
+            {
+                // Processus fils → ouvre un terminal GNOME
+                execl("/usr/bin/gnome-terminal", "gnome-terminal",
+                    "--", "bash", "-c",
+                    commande,
+                    (char *)NULL);
+                perror("Erreur execl");
+                exit(1);
+            }
+
+            // On mémorise le PID pour pouvoir kill plus tard
+            g_pid_affichage = pid_terminal;
             
             /* Lancer directement le dialogue dans le groupe */
             dialoguer_groupe(socket_fd, config);
@@ -386,7 +398,7 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
             
             if (g_pid_affichage > 0)
             {
-                kill(g_pid_affichage, SIGTERM);
+                kill(g_pid_affichage, SIGKILL);
             }
             
             g_dans_groupe = 0;
