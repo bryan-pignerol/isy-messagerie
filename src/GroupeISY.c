@@ -289,6 +289,12 @@ void traiter_message(struct struct_message *msg, struct sockaddr_in *addr_client
         printf("Reception Commande %s : %s\n", msg->Emetteur, msg->Texte);
         traiter_commande(msg, socket_fd);
     }
+    else if (strcmp(msg->Ordre, ORDRE_MERGE) == 0)
+    {
+        printf("%sFusion de groupe demandee%s\n", COULEUR_MAGENTA, COULEUR_RESET);
+        /* Redistribuer aux clients pour qu'ils changent de groupe */
+        redistribuer_message(msg, socket_fd);
+    }
 }
 
 /*============================================================================*

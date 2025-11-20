@@ -418,6 +418,13 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
            COULEUR_ROUGE, COULEUR_RESET);
     printf("Tapez %scmd%s pour entrer une commande\n",
            COULEUR_JAUNE, COULEUR_RESET);
+    printf("%sCommandes moderateur :%s\n", COULEUR_CYAN, COULEUR_RESET);
+    printf("  %sDELETE <nom>%s - Expulser un membre\n",
+           COULEUR_JAUNE, COULEUR_RESET);
+    printf("  %sLIST%s - Lister les membres\n",
+           COULEUR_JAUNE, COULEUR_RESET);
+    printf("  %sMERGE <groupe>%s - Fusionner avec un autre groupe\n",
+           COULEUR_JAUNE, COULEUR_RESET);
     printf("%s========================================%s\n\n",
            COULEUR_MAGENTA, COULEUR_RESET);
     
@@ -487,15 +494,33 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
             }
             ligne[strcspn(ligne, "\n")] = 0;
             
-            memset(&msg, 0, sizeof(msg));
-            strncpy(msg.Ordre, ORDRE_CMD, TAILLE_ORDRE - 1);
-            strncpy(msg.Emetteur, config->nom_utilisateur, TAILLE_EMETTEUR - 1);
-            strncpy(msg.Texte, ligne, TAILLE_TEXTE - 1);
-            
-            sendto(socket_fd, &msg, sizeof(msg), 0,
-                   (struct sockaddr *)&g_addr_groupe, sizeof(g_addr_groupe));
-            
-            printf("Commande : ");
+            /* Vérifier si c'est la commande MERGE (doit passer par le serveur) */
+            if (strncmp(ligne, "MERGE ", 6) == 0)
+            {
+                memset(&msg, 0, sizeof(msg));
+                memcpy(msg.Ordre, ORDRE_MERGE, strlen(ORDRE_MERGE));
+                msg.Ordre[TAILLE_ORDRE - 1] = '\0';
+                strncpy(msg.Emetteur, config->nom_utilisateur, TAILLE_EMETTEUR - 1);
+                sprintf(msg.Texte, "%s %s", g_nom_groupe_actuel, ligne + 6);
+                
+                /* Envoyer au serveur */
+                sendto(socket_fd, &msg, sizeof(msg), 0,
+                       (struct sockaddr *)&g_addr_serveur, sizeof(g_addr_serveur));
+                
+                printf("%sDemande de fusion envoyee...%s\n", 
+                       COULEUR_JAUNE, COULEUR_RESET);
+            }
+            else
+            {
+                /* Autres commandes (DELETE, LIST) → GroupeISY */
+                memset(&msg, 0, sizeof(msg));
+                strncpy(msg.Ordre, ORDRE_CMD, TAILLE_ORDRE - 1);
+                strncpy(msg.Emetteur, config->nom_utilisateur, TAILLE_EMETTEUR - 1);
+                strncpy(msg.Texte, ligne, TAILLE_TEXTE - 1);
+                
+                sendto(socket_fd, &msg, sizeof(msg), 0,
+                       (struct sockaddr *)&g_addr_groupe, sizeof(g_addr_groupe));
+            }
         }
         else
         {

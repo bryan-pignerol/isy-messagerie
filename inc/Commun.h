@@ -24,10 +24,11 @@
 #include <sys/socket.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include <sys/time.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 
 /*============================================================================*
  * CONSTANTES GENERALES
@@ -63,6 +64,7 @@
 #define ORDRE_ACK "ACK"      /* Accusé de réception */
 #define ORDRE_ERR "ERR"      /* Erreur */
 #define ORDRE_INF "INF"      /* Information */
+#define ORDRE_MERGE "MERG"   /* Fusion de groupes */
 
 /*============================================================================*
  * STRUCTURE DES MESSAGES RESEAU

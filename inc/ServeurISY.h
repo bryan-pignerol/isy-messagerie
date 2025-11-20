@@ -37,6 +37,7 @@ void traiter_demande_connexion(struct struct_message *msg, struct sockaddr_in *a
 void traiter_demande_deconnexion(struct struct_message *msg);
 void traiter_demande_creation(struct struct_message *msg, struct sockaddr_in *addr_client);
 void traiter_demande_liste(struct struct_message *msg, struct sockaddr_in *addr_client);
+void traiter_demande_fusion(struct struct_message *msg, struct sockaddr_in *addr_client);
 
 /* Nettoyage */
 void terminer_proprement(void);

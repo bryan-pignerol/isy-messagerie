@@ -8,7 +8,7 @@
  * Description  : Serveur principal pour la gestion des groupes de discussion
  *============================================================================*/
 
-#include "../inc/ServeurISY.h"
+#include "ServeurISY.h"
 
 /*============================================================================*
  * VARIABLES GLOBALES
@@ -400,6 +400,119 @@ void terminer_proprement(void)
 }
 
 /*============================================================================*
+ * FONCTION : traiter_demande_fusion
+ * DESCRIPTION : Fusionne deux groupes (seul le modérateur peut fusionner)
+ *============================================================================*/
+void traiter_demande_fusion(struct struct_message *msg, struct sockaddr_in *addr_client)
+{
+    char nom_groupe_source[TAILLE_NOM_GROUPE];
+    char nom_groupe_cible[TAILLE_NOM_GROUPE];
+    struct struct_message reponse;
+    struct struct_message notif_transfert;
+    int i, j;
+    int idx_source = -1, idx_cible = -1;
+    
+    sscanf(msg->Texte, "%s %s", nom_groupe_source, nom_groupe_cible);
+    
+    /* Chercher les deux groupes */
+    for (i = 0; i < g_shm->nb_groupes; i++)
+    {
+        if (g_shm->groupes[i].actif && strcmp(g_shm->groupes[i].nom, nom_groupe_source) == 0)
+        {
+            idx_source = i;
+        }
+        if (g_shm->groupes[i].actif && strcmp(g_shm->groupes[i].nom, nom_groupe_cible) == 0)
+        {
+            idx_cible = i;
+        }
+    }
+    
+    /* Vérifications */
+    memset(&reponse, 0, sizeof(reponse));
+    strncpy(reponse.Emetteur, "SERVEUR", TAILLE_EMETTEUR - 1);
+    
+    if (idx_source == -1)
+    {
+        strncpy(reponse.Ordre, ORDRE_ERR, TAILLE_ORDRE - 1);
+        sprintf(reponse.Texte, "Groupe source %s introuvable", nom_groupe_source);
+        sendto(g_socket_serveur, &reponse, sizeof(reponse), 0,
+               (struct sockaddr *)addr_client, sizeof(*addr_client));
+        return;
+    }
+    
+    if (idx_cible == -1)
+    {
+        strncpy(reponse.Ordre, ORDRE_ERR, TAILLE_ORDRE - 1);
+        sprintf(reponse.Texte, "Groupe cible %s introuvable", nom_groupe_cible);
+        sendto(g_socket_serveur, &reponse, sizeof(reponse), 0,
+               (struct sockaddr *)addr_client, sizeof(*addr_client));
+        return;
+    }
+    
+    /* Vérifier que l'émetteur est bien le modérateur du groupe source */
+    if (strcmp(g_shm->groupes[idx_source].moderateur, msg->Emetteur) != 0)
+    {
+        strncpy(reponse.Ordre, ORDRE_ERR, TAILLE_ORDRE - 1);
+        sprintf(reponse.Texte, "Seul le moderateur peut fusionner");
+        sendto(g_socket_serveur, &reponse, sizeof(reponse), 0,
+               (struct sockaddr *)addr_client, sizeof(*addr_client));
+        return;
+    }
+    
+    printf("%sFusion %s -> %s demandee par %s%s\n",
+           COULEUR_MAGENTA, nom_groupe_source, nom_groupe_cible, 
+           msg->Emetteur, COULEUR_RESET);
+    
+    /* Envoyer notification de transfert à tous les membres du groupe source */
+    memset(&notif_transfert, 0, sizeof(notif_transfert));
+    memcpy(notif_transfert.Ordre, ORDRE_MERGE, strlen(ORDRE_MERGE));
+    notif_transfert.Ordre[TAILLE_ORDRE - 1] = '\0';
+    strncpy(notif_transfert.Emetteur, "SERVEUR", TAILLE_EMETTEUR - 1);
+    sprintf(notif_transfert.Texte, "TRANSFER %s %d", 
+            nom_groupe_cible, g_shm->groupes[idx_cible].port);
+    
+    /* Envoyer le message de transfert au GroupeISY source pour qu'il redistribue */
+    struct sockaddr_in addr_groupe_source;
+    memset(&addr_groupe_source, 0, sizeof(addr_groupe_source));
+    addr_groupe_source.sin_family = AF_INET;
+    addr_groupe_source.sin_port = htons(g_shm->groupes[idx_source].port);
+    addr_groupe_source.sin_addr.s_addr = inet_addr("127.0.0.1");
+    
+    sendto(g_socket_serveur, &notif_transfert, sizeof(notif_transfert), 0,
+           (struct sockaddr *)&addr_groupe_source, sizeof(addr_groupe_source));
+    
+    /* Attendre un peu pour que les clients reçoivent la notification */
+    sleep(1);
+    
+    /* Détruire le groupe source */
+    printf("%sDestruction du groupe source %s%s\n",
+           COULEUR_JAUNE, nom_groupe_source, COULEUR_RESET);
+    
+    if (g_shm->groupes[idx_source].pid_groupe > 0)
+    {
+        kill(g_shm->groupes[idx_source].pid_groupe, SIGINT);
+        waitpid(g_shm->groupes[idx_source].pid_groupe, NULL, 0);
+    }
+    
+    g_shm->groupes[idx_source].actif = 0;
+    
+    /* Réorganiser le tableau si nécessaire */
+    for (j = idx_source; j < g_shm->nb_groupes - 1; j++)
+    {
+        g_shm->groupes[j] = g_shm->groupes[j + 1];
+    }
+    g_shm->nb_groupes--;
+    
+    /* Confirmer au modérateur */
+    strncpy(reponse.Ordre, ORDRE_ACK, TAILLE_ORDRE - 1);
+    strcpy(reponse.Texte, "Fusion reussie");
+    sendto(g_socket_serveur, &reponse, sizeof(reponse), 0,
+           (struct sockaddr *)addr_client, sizeof(*addr_client));
+    
+    printf("%sFusion terminee avec succes%s\n", COULEUR_VERT, COULEUR_RESET);
+}
+
+/*============================================================================*
  * FONCTION : main
  * DESCRIPTION : Point d'entree du serveur ISY
  *============================================================================*/
@@ -482,6 +595,10 @@ int main(int argc, char **argv, char **envp)
         else if (strcmp(msg.Ordre, ORDRE_LST) == 0)
         {
             traiter_demande_liste(&msg, &addr_client);
+        }
+        else if (strcmp(msg.Ordre, ORDRE_MERGE) == 0)
+        {
+            traiter_demande_fusion(&msg, &addr_client);
         }
     }
     
