@@ -8,7 +8,14 @@
  * Description  : Interface client pour la gestion des commandes utilisateur
  *============================================================================*/
 
+#include <fcntl.h>
+#include <sys/stat.h>
 #include "../inc/ClientISY.h"
+
+/*============================================================================*
+ * PROTOTYPES DES FONCTIONS INTERNES
+ *============================================================================*/
+void dialoguer_groupe(int socket_fd, ConfigClient *config);
 
 /*============================================================================*
  * VARIABLES GLOBALES
@@ -106,8 +113,7 @@ void afficher_menu(void)
     printf("  %s0%s - Creation de groupe\n", COULEUR_VERT, COULEUR_RESET);
     printf("  %s1%s - Rejoindre un groupe\n", COULEUR_VERT, COULEUR_RESET);
     printf("  %s2%s - Lister les groupes\n", COULEUR_VERT, COULEUR_RESET);
-    printf("  %s3%s - Dialoguer sur un groupe\n", COULEUR_VERT, COULEUR_RESET);
-    printf("  %s4%s - Quitter\n", COULEUR_ROUGE, COULEUR_RESET);
+    printf("  %s3%s - Quitter\n", COULEUR_ROUGE, COULEUR_RESET);
     printf("%s========================================%s\n",
            COULEUR_CYAN, COULEUR_RESET);
     printf("Choix : ");
@@ -274,6 +280,9 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
             
             g_pid_affichage = lancer_affichage(nom_groupe, port_groupe);
             g_dans_groupe = 1;
+            
+            /* Lancer directement le dialogue dans le groupe */
+            dialoguer_groupe(socket_fd, config);
         }
         else
         {
@@ -416,6 +425,7 @@ pid_t lancer_affichage(const char *nom_groupe, int port_groupe)
 {
     pid_t pid;
     char port_str[10];
+    int devnull;
     
     sprintf(port_str, "%d", port_groupe);
     
@@ -427,6 +437,15 @@ pid_t lancer_affichage(const char *nom_groupe, int port_groupe)
     }
     else if (pid == 0)
     {
+        /* Rediriger stdout et stderr vers /dev/null pour ne pas polluer le terminal */
+        devnull = open("/dev/null", O_WRONLY);
+        if (devnull != -1)
+        {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        
         execl("./AffichageISY", "AffichageISY", nom_groupe, port_str, NULL);
         perror("Erreur execl");
         exit(1);
@@ -527,9 +546,6 @@ int main(int argc, char **argv, char **envp)
                 lister_groupes_cmd(g_socket_client, &g_config);
                 break;
             case 3:
-                dialoguer_groupe(g_socket_client, &g_config);
-                break;
-            case 4:
                 g_continuer_client = 0;
                 break;
             default:
