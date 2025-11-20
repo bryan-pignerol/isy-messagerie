@@ -10,7 +10,7 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
-#include "../inc/ClientISY.h"
+#include "ClientISY.h"
 
 /*============================================================================*
  * PROTOTYPES DES FONCTIONS INTERNES
@@ -217,6 +217,16 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
     ssize_t n;
     int port_groupe;
     char moderateur[TAILLE_EMETTEUR];
+    struct timeval tv;
+    
+    /* Configurer un timeout sur le socket pour éviter les blocages */
+    tv.tv_sec = 2;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    
+    /* Vider le buffer du socket pour éviter de recevoir d'anciens messages */
+    struct struct_message dummy;
+    while (recvfrom(socket_fd, &dummy, sizeof(dummy), MSG_DONTWAIT, NULL, NULL) > 0);
     
     printf("\n%sSaisir le nom du groupe : %s", COULEUR_CYAN, COULEUR_RESET);
     if (fgets(nom_groupe, sizeof(nom_groupe), stdin) == NULL)
@@ -246,67 +256,107 @@ void rejoindre_groupe_cmd(int socket_fd, ConfigClient *config)
     sendto(socket_fd, &msg, sizeof(msg), 0,
            (struct sockaddr *)&g_addr_serveur, sizeof(g_addr_serveur));
     
-    len_addr = sizeof(g_addr_serveur);
-    n = recvfrom(socket_fd, &reponse, sizeof(reponse), 0,
-                (struct sockaddr *)&g_addr_serveur, &len_addr);
+    /* Attendre spécifiquement un message ACK du serveur */
+    int tentatives = 0;
+    int recu_ack = 0;
     
-    if (n > 0)
+    while (tentatives < 10 && !recu_ack)
     {
-        if (strcmp(reponse.Ordre, ORDRE_ACK) == 0)
+        len_addr = sizeof(g_addr_serveur);
+        n = recvfrom(socket_fd, &reponse, sizeof(reponse), 0,
+                    (struct sockaddr *)&g_addr_serveur, &len_addr);
+        
+        if (n > 0)
         {
-            sscanf(reponse.Texte, "PORT=%d MODERATEUR=%s", &port_groupe, moderateur);
-            
-            printf("%sConnexion au groupe %s realisee%s\n",
-                   COULEUR_VERT, nom_groupe, COULEUR_RESET);
-            
-            strncpy(g_nom_groupe_actuel, nom_groupe, TAILLE_NOM_GROUPE - 1);
-            g_port_groupe_actuel = port_groupe;
-            
-            memset(&g_addr_groupe, 0, sizeof(g_addr_groupe));
-            g_addr_groupe.sin_family = AF_INET;
-            g_addr_groupe.sin_port = htons(port_groupe);
-            g_addr_groupe.sin_addr.s_addr = inet_addr(config->ip_serveur);
-            
-            memset(&msg_connexion, 0, sizeof(msg_connexion));
-            strncpy(msg_connexion.Ordre, ORDRE_CON, TAILLE_ORDRE - 1);
-            strncpy(msg_connexion.Emetteur, config->nom_utilisateur, TAILLE_EMETTEUR - 1);
-            sprintf(msg_connexion.Texte, "Connexion au groupe");
-            
-            sendto(socket_fd, &msg_connexion, sizeof(msg_connexion), 0,
-                   (struct sockaddr *)&g_addr_groupe, sizeof(g_addr_groupe));
-            
-            printf("%sLancement de l affichage...%s\n",
-                   COULEUR_JAUNE, COULEUR_RESET);
-            
-            g_dans_groupe = 1;
-
-            char commande[512];
-            snprintf(commande, sizeof(commande),
-                "gnome-terminal -- bash -c './AffichageISY \"%s\" %d; exec bash'",
-                nom_groupe, port_groupe);
-
-            pid_t pid_terminal = fork();
-            if (pid_terminal == 0)
+            /* Vérifier si c'est bien un ACK/ERR du serveur (pas un message du groupe) */
+            if (strcmp(reponse.Ordre, ORDRE_ACK) == 0 || strcmp(reponse.Ordre, ORDRE_ERR) == 0)
             {
-                // Processus fils → ouvre un terminal GNOME
-                execl("/usr/bin/gnome-terminal", "gnome-terminal",
-                    "--", "bash", "-c",
-                    commande,
-                    (char *)NULL);
-                perror("Erreur execl");
-                exit(1);
+                recu_ack = 1;
             }
-
-            // On mémorise le PID pour pouvoir kill plus tard
-            g_pid_affichage = pid_terminal;
-            
-            /* Lancer directement le dialogue dans le groupe */
-            dialoguer_groupe(socket_fd, config);
+            else
+            {
+                /* Message parasite (notification, etc.), on ignore */
+                tentatives++;
+            }
         }
         else
         {
-            printf("%sErreur : %s%s\n", COULEUR_ROUGE, reponse.Texte, COULEUR_RESET);
+            tentatives++;
         }
+    }
+    
+    /* Remettre le socket en mode bloquant */
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    
+    if (recu_ack && strcmp(reponse.Ordre, ORDRE_ACK) == 0)
+    {
+        sscanf(reponse.Texte, "PORT=%d MODERATEUR=%s", &port_groupe, moderateur);
+        
+        printf("%sConnexion au groupe %s realisee%s\n",
+               COULEUR_VERT, nom_groupe, COULEUR_RESET);
+        
+        strncpy(g_nom_groupe_actuel, nom_groupe, TAILLE_NOM_GROUPE - 1);
+        g_port_groupe_actuel = port_groupe;
+        
+        memset(&g_addr_groupe, 0, sizeof(g_addr_groupe));
+        g_addr_groupe.sin_family = AF_INET;
+        g_addr_groupe.sin_port = htons(port_groupe);
+        g_addr_groupe.sin_addr.s_addr = inet_addr(config->ip_serveur);
+        
+        memset(&msg_connexion, 0, sizeof(msg_connexion));
+        strncpy(msg_connexion.Ordre, ORDRE_CON, TAILLE_ORDRE - 1);
+        strncpy(msg_connexion.Emetteur, config->nom_utilisateur, TAILLE_EMETTEUR - 1);
+        sprintf(msg_connexion.Texte, "Connexion au groupe");
+        
+        sendto(socket_fd, &msg_connexion, sizeof(msg_connexion), 0,
+               (struct sockaddr *)&g_addr_groupe, sizeof(g_addr_groupe));
+        
+        printf("%sLancement de l affichage...%s\n",
+               COULEUR_JAUNE, COULEUR_RESET);
+        
+        g_dans_groupe = 1;
+
+        char commande[512];
+        snprintf(commande, sizeof(commande),
+            "./AffichageISY \"%s\" %d; exec bash",
+            nom_groupe, port_groupe);
+
+        pid_t pid_terminal = fork();
+        if (pid_terminal == 0)
+        {
+            /* Créer un nouveau groupe de processus pour pouvoir le tuer facilement */
+            setpgid(0, 0);
+            
+            /* Processus fils → ouvre un terminal GNOME */
+            execl("/usr/bin/gnome-terminal", "gnome-terminal",
+                "--", "bash", "-c",
+                commande,
+                (char *)NULL);
+            perror("Erreur execl gnome-terminal");
+            exit(1);
+        }
+        else if (pid_terminal > 0)
+        {
+            /* Mettre le processus dans son propre groupe */
+            setpgid(pid_terminal, pid_terminal);
+        }
+
+        /* On mémorise le PID pour pouvoir kill plus tard */
+        g_pid_affichage = pid_terminal;
+        
+        /* Lancer directement le dialogue dans le groupe */
+        dialoguer_groupe(socket_fd, config);
+    }
+    else if (recu_ack && strcmp(reponse.Ordre, ORDRE_ERR) == 0)
+    {
+        printf("%sErreur : %s%s\n", COULEUR_ROUGE, reponse.Texte, COULEUR_RESET);
+    }
+    else if (!recu_ack)
+    {
+        printf("%sErreur : Timeout - Pas de reponse du serveur%s\n", 
+               COULEUR_ROUGE, COULEUR_RESET);
     }
 }
 
@@ -398,10 +448,34 @@ void dialoguer_groupe(int socket_fd, ConfigClient *config)
             
             if (g_pid_affichage > 0)
             {
+                /* Méthode 1 : Tuer le groupe de processus */
+                kill(-g_pid_affichage, SIGTERM);
+                usleep(200000); /* 200ms */
+                kill(-g_pid_affichage, SIGKILL);
+                
+                /* Méthode 2 : Tuer spécifiquement gnome-terminal et AffichageISY */
+                char cmd[256];
+                snprintf(cmd, sizeof(cmd), "pkill -P %d", g_pid_affichage);
+                system(cmd);
+                
+                /* Méthode 3 : Tuer directement le PID */
                 kill(g_pid_affichage, SIGKILL);
+                
+                waitpid(g_pid_affichage, NULL, WNOHANG);
+                g_pid_affichage = -1;
             }
             
+            /* Réinitialiser complètement les variables globales du groupe */
             g_dans_groupe = 0;
+            memset(g_nom_groupe_actuel, 0, sizeof(g_nom_groupe_actuel));
+            g_port_groupe_actuel = 0;
+            memset(&g_addr_groupe, 0, sizeof(g_addr_groupe));
+            
+            printf("\n%sVous avez quitte le groupe%s\n", 
+                   COULEUR_VERT, COULEUR_RESET);
+            printf("%sRetour au menu principal...%s\n\n", 
+                   COULEUR_JAUNE, COULEUR_RESET);
+            
             break;
         }
         else if (strcmp(ligne, "cmd") == 0)
@@ -492,7 +566,17 @@ void terminer_client_proprement(void)
         sendto(g_socket_client, &msg, sizeof(msg), 0,
                (struct sockaddr *)&g_addr_groupe, sizeof(g_addr_groupe));
         
-        kill(g_pid_affichage, SIGTERM);
+        /* Tuer le groupe de processus et tous ses enfants */
+        kill(-g_pid_affichage, SIGTERM);
+        usleep(200000);
+        kill(-g_pid_affichage, SIGKILL);
+        
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "pkill -P %d", g_pid_affichage);
+        system(cmd);
+        
+        kill(g_pid_affichage, SIGKILL);
+        waitpid(g_pid_affichage, NULL, WNOHANG);
     }
     
     if (g_socket_client != -1)

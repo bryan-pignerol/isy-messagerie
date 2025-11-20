@@ -24,6 +24,7 @@
 #include <sys/socket.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
 #include <errno.h>
