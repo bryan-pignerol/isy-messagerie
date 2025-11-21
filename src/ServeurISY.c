@@ -142,29 +142,43 @@ int initialiser_memoire_partagee(void)
 int creer_groupe(const char *nom, const char *mot_passe, const char *moderateur)
 {
     int i;
+    int slot_libre;
     pid_t pid;
     
-    if (g_shm->nb_groupes >= MAX_GROUPES)
+    /* Vérifier si le nom existe déjà parmi les groupes actifs */
+    for (i = 0; i < MAX_GROUPES; i++)
     {
-        return -1;
-    }
-    
-    for (i = 0; i < g_shm->nb_groupes; i++)
-    {
-        if (strcmp(g_shm->groupes[i].nom, nom) == 0)
+        if (g_shm->groupes[i].actif && strcmp(g_shm->groupes[i].nom, nom) == 0)
         {
             return -2;
         }
     }
     
-    i = g_shm->nb_groupes;
-    strncpy(g_shm->groupes[i].nom, nom, TAILLE_NOM_GROUPE - 1);
-    strncpy(g_shm->groupes[i].mot_passe, mot_passe, TAILLE_MOT_PASSE - 1);
-    strncpy(g_shm->groupes[i].moderateur, moderateur, TAILLE_EMETTEUR - 1);
-    g_shm->groupes[i].port = PORT_GROUPE_BASE + i + 1;
-    g_shm->groupes[i].nb_membres = 0;
-    g_shm->groupes[i].nb_messages = 0;
-    g_shm->groupes[i].actif = 1;
+    /* Chercher un slot libre (soit après nb_groupes, soit un slot inactif) */
+    slot_libre = -1;
+    for (i = 0; i < MAX_GROUPES; i++)
+    {
+        if (!g_shm->groupes[i].actif)
+        {
+            slot_libre = i;
+            break;
+        }
+    }
+    
+    if (slot_libre == -1)
+    {
+        return -1; /* Plus de slots disponibles */
+    }
+    
+    /* Initialiser le groupe dans le slot trouvé */
+    memset(&g_shm->groupes[slot_libre], 0, sizeof(Groupe));
+    strncpy(g_shm->groupes[slot_libre].nom, nom, TAILLE_NOM_GROUPE - 1);
+    strncpy(g_shm->groupes[slot_libre].mot_passe, mot_passe, TAILLE_MOT_PASSE - 1);
+    strncpy(g_shm->groupes[slot_libre].moderateur, moderateur, TAILLE_EMETTEUR - 1);
+    g_shm->groupes[slot_libre].port = PORT_GROUPE_BASE + slot_libre + 1;
+    g_shm->groupes[slot_libre].nb_membres = 0;
+    g_shm->groupes[slot_libre].nb_messages = 0;
+    g_shm->groupes[slot_libre].actif = 1;
     
     pid = fork();
     if (pid == -1)
@@ -175,16 +189,21 @@ int creer_groupe(const char *nom, const char *mot_passe, const char *moderateur)
     else if (pid == 0)
     {
         char port_str[10];
-        sprintf(port_str, "%d", g_shm->groupes[i].port);
+        sprintf(port_str, "%d", g_shm->groupes[slot_libre].port);
         execl("./GroupeISY", "GroupeISY", nom, port_str, moderateur, NULL);
         perror("Erreur execl");
         exit(1);
     }
     
-    g_shm->groupes[i].pid_groupe = pid;
-    g_shm->nb_groupes++;
+    g_shm->groupes[slot_libre].pid_groupe = pid;
     
-    return i;
+    /* Mettre à jour nb_groupes si nécessaire */
+    if (slot_libre >= g_shm->nb_groupes)
+    {
+        g_shm->nb_groupes = slot_libre + 1;
+    }
+    
+    return slot_libre;
 }
 
 /*============================================================================*
@@ -409,7 +428,7 @@ void traiter_demande_fusion(struct struct_message *msg, struct sockaddr_in *addr
     char nom_groupe_cible[TAILLE_NOM_GROUPE];
     struct struct_message reponse;
     struct struct_message notif_transfert;
-    int i, j;
+    int i;
     int idx_source = -1, idx_cible = -1;
     
     sscanf(msg->Texte, "%s %s", nom_groupe_source, nom_groupe_cible);
@@ -494,14 +513,9 @@ void traiter_demande_fusion(struct struct_message *msg, struct sockaddr_in *addr
         waitpid(g_shm->groupes[idx_source].pid_groupe, NULL, 0);
     }
     
+    /* Marquer le groupe comme inactif (ne pas réorganiser le tableau) */
     g_shm->groupes[idx_source].actif = 0;
-    
-    /* Réorganiser le tableau si nécessaire */
-    for (j = idx_source; j < g_shm->nb_groupes - 1; j++)
-    {
-        g_shm->groupes[j] = g_shm->groupes[j + 1];
-    }
-    g_shm->nb_groupes--;
+    g_shm->groupes[idx_source].pid_groupe = 0;
     
     /* Confirmer au modérateur */
     strncpy(reponse.Ordre, ORDRE_ACK, TAILLE_ORDRE - 1);

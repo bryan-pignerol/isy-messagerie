@@ -370,6 +370,18 @@ void lister_groupes_cmd(int socket_fd, ConfigClient *config)
     struct struct_message reponse;
     socklen_t len_addr;
     ssize_t n;
+    struct timeval tv;
+    int tentatives;
+    int recu_liste;
+    struct struct_message dummy;
+    
+    /* Vider le buffer du socket */
+    while (recvfrom(socket_fd, &dummy, sizeof(dummy), MSG_DONTWAIT, NULL, NULL) > 0);
+    
+    /* Configurer timeout */
+    tv.tv_sec = 2;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     
     memset(&msg, 0, sizeof(msg));
     strncpy(msg.Ordre, ORDRE_LST, TAILLE_ORDRE - 1);
@@ -379,11 +391,41 @@ void lister_groupes_cmd(int socket_fd, ConfigClient *config)
     sendto(socket_fd, &msg, sizeof(msg), 0,
            (struct sockaddr *)&g_addr_serveur, sizeof(g_addr_serveur));
     
-    len_addr = sizeof(g_addr_serveur);
-    n = recvfrom(socket_fd, &reponse, sizeof(reponse), 0,
-                (struct sockaddr *)&g_addr_serveur, &len_addr);
+    /* Attendre spécifiquement la réponse du serveur */
+    tentatives = 0;
+    recu_liste = 0;
     
-    if (n > 0)
+    while (tentatives < 10 && !recu_liste)
+    {
+        len_addr = sizeof(g_addr_serveur);
+        n = recvfrom(socket_fd, &reponse, sizeof(reponse), 0,
+                    (struct sockaddr *)&g_addr_serveur, &len_addr);
+        
+        if (n > 0)
+        {
+            /* Vérifier que c'est bien une réponse du serveur avec la liste */
+            if (strcmp(reponse.Emetteur, "SERVEUR") == 0)
+            {
+                recu_liste = 1;
+            }
+            else
+            {
+                /* Message parasite d'un groupe */
+                tentatives++;
+            }
+        }
+        else
+        {
+            tentatives++;
+        }
+    }
+    
+    /* Remettre le socket en mode bloquant */
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    
+    if (recu_liste)
     {
         printf("\n%s========== LISTE DES GROUPES ==========%s\n",
                COULEUR_CYAN, COULEUR_RESET);

@@ -294,6 +294,14 @@ void traiter_message(struct struct_message *msg, struct sockaddr_in *addr_client
         printf("%sFusion de groupe demandee%s\n", COULEUR_MAGENTA, COULEUR_RESET);
         /* Redistribuer aux clients pour qu'ils changent de groupe */
         redistribuer_message(msg, socket_fd);
+        
+        /* Attendre que les clients reçoivent le message */
+        sleep(1);
+        
+        /* Fermer le groupe */
+        printf("%sFermeture du groupe apres fusion%s\n", 
+               COULEUR_JAUNE, COULEUR_RESET);
+        g_continuer_groupe = 0;
     }
 }
 
